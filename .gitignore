@@ -1,4 +1,4 @@
 .venv/
-ss_script
-imgs
 rois
+data/test_images
+scripts
