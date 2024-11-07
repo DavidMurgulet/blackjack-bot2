@@ -2,4 +2,4 @@
 rois
 runs
 data/test_images
-
+src/__pycache__/
