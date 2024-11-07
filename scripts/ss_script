@@ -1,0 +1,36 @@
+import os
+import time
+import pyautogui
+import cv2
+import numpy as np
+
+# Set up the folder path
+desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+folder_name = "script ss"
+folder_path = os.path.join(desktop_path, folder_name)
+
+# Create the directory if it doesn't exist
+if not os.path.exists(folder_path):
+    os.makedirs(folder_path)
+
+# Get the screen size
+screen_width, screen_height = pyautogui.size()
+
+# Start taking screenshots every 5 seconds
+try:
+    while True:
+        # Get the current time to name the screenshot
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        screenshot_name = f"screenshot_{timestamp}.png"
+        screenshot_path = os.path.join(folder_path, screenshot_name)
+
+        # Take the screenshot
+        screenshot = pyautogui.screenshot()
+        screenshot.save(screenshot_path)
+        print(f"Screenshot saved: {screenshot_path}")
+
+        # Wait for 3 seconds
+        time.sleep(5)
+
+except KeyboardInterrupt:
+    print("Screenshot recording stopped.")
