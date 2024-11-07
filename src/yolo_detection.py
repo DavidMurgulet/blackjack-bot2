@@ -14,15 +14,15 @@ class DetectionModel:
             "double": False,
             "split": False,
             "bet_button": False, 
-            "bet_1": False,
-            "bet_5": False,
-            "bet_10": False,
+            "bet_one": False,
+            "bet_five": False,
+            "bet_ten": False,
             # TODO: Add more bet options
         }
 
 
     def detect(self, img):
-        results = self.model([img], conf=0.15, save=True)
+        results = self.model([img], conf=0.30, save=True)
         names = results[0].names
 
     
@@ -34,10 +34,6 @@ class DetectionModel:
 #     def detect(self, img):
 #         return self.model([img], conf=0.15, save=True)
     
-
-# # Initialize the decision dictionary
-# decision = {str(i): False for i in range(1, 11)}
-# decision.update({"K": False, "Q": False, "J": False})
 
 # img = cv2.imread('test2.png')
 # img = cv2.resize(img, (800, 800))
