@@ -5,7 +5,8 @@ from screen_capture import ScreenCapture
 from strategy import Game
 import sys
 import select
-# import yolo_detections
+import yolo_detection
+import pyautogui
 
 #TODO: implement yolo training to detect card
         # action returns inital decision
@@ -77,6 +78,8 @@ class Bot:
         self.cards_dealt = False # change to cards dealt
         self.decision_made = False
         self.dealer_ace = False
+
+        self.yolo_model = yolo_detection.DetectionModel('data/weights/best.pt')
 
 
     def start_game(self, player_cards, dealer_upcard):
@@ -153,11 +156,16 @@ class Bot:
 
                 
     def process_betting_phase(self, img):
-        # take img and give to yolo to detect bet options and bet button
-        # if bet options and bet button detected, then place bet
+        # resize image to 640x640?
+        detect_results = self.yolo_model.detect(img)
 
-        # if bet_amount less than 5, or weird value, write function for multiple clicks.
-        self.bet_made = True
+        if (detect_results["bet_one"] and detect_results["bet_five"] and detect_results["bet_ten"] and detect_results["bet_button"]):
+
+            bet_button_x, bet_button_y = detect_results["bet_button_location"]
+            pyautogui.click(bet_button_x, bet_button_y)
+            self.bet_placed = True
+
+            self.bet_amount = USER_BET_AMOUNT
 
     def process_drawing_phase(self, img):
         player_value, dealer_value = self.screen_cap.process_frame(img)
