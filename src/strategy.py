@@ -160,15 +160,18 @@ class Game:
                 else:
                     return "hit"
             elif self.player_total == 11:
-                return "double hit"
+                # TODO: Implement double logic
+                return "hit"
             elif self.player_total == 10:
                 if dealer_upcard in [2, 3, 4, 5, 6, 7, 8, 9]:
-                    return "double hit"
+                    #TODO: Implement double logic
+                    return "hit"
                 else:
                     return "hit"
             elif self.player_total == 9:
                 if dealer_upcard in [3, 4, 5, 6]:
-                    return "double hit"
+                    #TODO: Implement double logic
+                    return "hit"
                 else:
                     return "hit"
             else:  # 8 or less

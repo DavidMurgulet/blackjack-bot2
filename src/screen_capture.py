@@ -11,12 +11,6 @@ class ScreenCapture:
         # Initialize EasyOCR reader
         self.reader = easyocr.Reader(['en'], gpu=True)
 
-
-    # def resize_image(img, scale_percent=50):
-    #     width = int(img.shape[1] * scale_percent / 100)
-    #     height = int(img.shape[0] * scale_percent / 100)
-    #     return cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
-
     def load_image(self, image_path):
         # Load image from the file path
         img = cv2.imread(image_path)
@@ -35,8 +29,9 @@ class ScreenCapture:
         return img[y1:y2, x1:x2]
 
     def extract_text_with_easyocr(self, roi):
-        # Recognize text using EasyOCR (no need for thresholding or grayscale conversion)
-        result = self.reader.readtext(roi, allowlist ='0123456789/', contrast_ths=0.5, adjust_contrast=0.7, decoder='greedy')
+        # Recognize text using EasyOCR 
+        #  allowlist ='0123456789/'
+        result = self.reader.readtext(roi, contrast_ths=0.5, adjust_contrast=0.7, decoder='greedy')
         # Extract and return the recognized text
         return ' '.join([text for _, text, _ in result])
     
@@ -45,12 +40,12 @@ class ScreenCapture:
         img = self.load_image(img)
         
         # Process the frame and get the player and dealer values
-        curr_player_value, dealer_value = self.process_frame(img)
+        curr_player_value, dealer_value, status_msg = self.process_frame(img)
         
         # Print out the OCR results
         print("Player Value:", curr_player_value)
         print("Dealer Value:", dealer_value)
-
+        print("Status msg:" , status_msg)
 
     def process_frame(self, img):
         screen_height, screen_width, _ = img.shape
@@ -58,26 +53,26 @@ class ScreenCapture:
         # Define ROIs for player, dealer, and words
         rois = {
             "player": (int(screen_width * 0.445), int(screen_width * 0.469), int(screen_height * 0.81), int(screen_height * 0.833)),
-            "dealer": (int(screen_width * 0.49), int(screen_width * 0.509), int(screen_height * 0.519), int(screen_height * 0.544))
-            # "words": (int(screen_width * 0.41), int(screen_width * 0.58), int(screen_height * 0.47), int(screen_height * 0.52)),
+            "dealer": (int(screen_width * 0.49), int(screen_width * 0.509), int(screen_height * 0.519), int(screen_height * 0.544)),
+            "words": (int(screen_width * 0.41), int(screen_width * 0.58), int(screen_height * 0.47), int(screen_height * 0.52)),
         }
 
         # Extract ROIs
         player_roi = self.get_roi(img, *rois["player"])
         dealer_roi = self.get_roi(img, *rois["dealer"])
-        # words_roi = self.get_roi(img, *rois["words"])
+        words_roi = self.get_roi(img, *rois["words"])
 
         # Perform OCR using EasyOCR on each ROI
         curr_player_value = self.extract_text_with_easyocr(player_roi)
         dealer_value = self.extract_text_with_easyocr(dealer_roi)
-        # status_msg = self.extract_text_with_easyocr(words_roi)
+        status_msg = self.extract_text_with_easyocr(words_roi)
 
         # Save the ROIs to the "rois" folder (optional for debugging)
-        cv2.imwrite("rois/player_roi.png", player_roi)
-        cv2.imwrite("rois/dealer_roi.png", dealer_roi)
+        # cv2.imwrite("rois/player_roi.png", player_roi)
+        # cv2.imwrite("rois/dealer_roi.png", dealer_roi)
         # cv2.imwrite("rois/words_roi.png", words_roi)
 
-        return curr_player_value, dealer_value
+        return curr_player_value, dealer_value, status_msg
 
 
 if __name__ == "__main__":

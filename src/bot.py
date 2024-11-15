@@ -78,8 +78,12 @@ class Bot:
         self.cards_dealt = False # change to cards dealt
         self.decision_made = False
         self.dealer_ace = False
+        self.yolo_model = None
 
+
+    def initialize_yolo(self):
         self.yolo_model = yolo_detection.DetectionModel('data/weights/best.pt')
+        print("Yolo initialized")
 
 
     def start_game(self, player_cards, dealer_upcard):
@@ -99,12 +103,6 @@ class Bot:
         
         print("game not started, some cards missing")
         return None
-
-    def is_there_game(self):
-        pass
-
-    def end_game(self):
-        pass
 
     def process_game_frame(self, img):
         # read status player and dealer val in process_game_frame
@@ -135,14 +133,19 @@ class Bot:
 
 
         if self.phase == GamePhase.BETTING and self.bet_placed == False:
+            print("current phase:", self.phase)
             self.process_betting_phase(img)
         elif self.phase == GamePhase.DRAWING and self.cards_dealt == False:
+            print("current phase:", self.phase)
             self.process_drawing_phase(img)
         elif self.phase == GamePhase.DECISION and self.decision_made == False:
+            print("current phase:", self.phase)
             # once decision is clicked status will show "wait for other players" then switch to "dealing" when all players are done
-            # should check for both and continue reading depending on the decisoin that was made. stand -> only read dealer, hit -> read player.
             self.process_decision_phase(img)
         elif self.phase == GamePhase.PLAYING:
+            print("current phase:", self.phase)
+            # set decision to false after decision made (allows for new decision to be made)
+            self.decision_made = False
             if self.decision == "hit":
                 self.process_playing_phase_hit(img)
             elif self.decision == "stand":
@@ -154,18 +157,32 @@ class Bot:
                 # TODO: add logic for split
                 pass    
 
-                
     def process_betting_phase(self, img):
-        # resize image to 640x640?
+        # resize image to 640x640 (if necessary)
         detect_results = self.yolo_model.detect(img)
 
-        if (detect_results["bet_one"] and detect_results["bet_five"] and detect_results["bet_ten"] and detect_results["bet_button"]):
-
+        if detect_results["bet_one"] and detect_results["bet_five"] and detect_results["bet_ten"] and detect_results["bet_button"]:
+            bet_one_x, bet_one_y = detect_results["bet_one_location"]
+            bet_five_x, bet_five_y = detect_results["bet_five_location"]
+            bet_ten_x, bet_ten_y = detect_results["bet_ten_location"]
             bet_button_x, bet_button_y = detect_results["bet_button_location"]
+
+            bet_amount = USER_BET_AMOUNT
+            while bet_amount >= 10:
+                pyautogui.click(bet_ten_x, bet_ten_y)
+                bet_amount -= 10
+            while bet_amount >= 5:
+                pyautogui.click(bet_five_x, bet_five_y)
+                bet_amount -= 5
+            while bet_amount >= 1:
+                pyautogui.click(bet_one_x, bet_one_y)
+                bet_amount -= 1
+
             pyautogui.click(bet_button_x, bet_button_y)
             self.bet_placed = True
 
-            self.bet_amount = USER_BET_AMOUNT
+            ## DEBUGGING
+            # print("Bet placed:", self.bet_amount)
 
     def process_drawing_phase(self, img):
         player_value, dealer_value = self.screen_cap.process_frame(img)
@@ -229,13 +246,28 @@ class Bot:
             return
 
     def process_decision_phase(self, img):
-        # take img and give to yolo to detect hit stand double split
-        # if hit stand double split detected, make decision (click button)
-        # set decision_made = True
+        # resize image to 640x640 (if necessary)
+        detect_results = self.yolo_model.detect(img)
 
-        # status will change to "waiting for other players" then "dealing" when all players are done but small delay between the two so start reading at "waiting for other players"
+        if (detect_results["hit"] and detect_results["stand"] and detect_results["double"] and detect_results["split"]):
+            hit_x, hit_y = detect_results["hit_location"]
+            stand_x, stand_y = detect_results["stand_location"]
+            double_x, double_y = detect_results["double_location"]
+            split_x, split_y = detect_results["split_location"]
 
-        self.decision_made = True
+            if self.decision == "hit":
+                pyautogui.click(hit_x, hit_y)
+            elif self.decision == "stand":
+                pyautogui.click(stand_x, stand_y)
+            elif self.decision == "double":
+                pyautogui.click(double_x, double_y)
+            elif self.decision == "split":
+                pyautogui.click(split_x, split_y)
+
+            self.decision_made = True
+            # status will change to "waiting for other players" then "dealing" when all players are done but small
+            # delay between the two so start reading at "waiting for other players"
+
 
     def blackjack(self, player_value):
         if player_value == "21":
@@ -274,10 +306,16 @@ class Bot:
         self.bet_amount = 0
         self.bet_placed = False
         self.decision = None
+        self.decision_made = False
+        self.dealer_ace = False
+        self.game_in_progress = False
+        self.prev_dv = 0
+        self.player_ace = False
 
 
     def run(self):
         print("Bot is running")
+        self.initialize_yolo()
         # TODO: add logic allowing user to stop, set bet amount,
         while True:
             # Capture screen every other frame
