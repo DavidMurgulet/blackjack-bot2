@@ -3,12 +3,11 @@ import time
 import threading
 from screen_capture import ScreenCapture
 from strategy import Game
-import sys
-import select
 import yolo_detection
 import pyautogui
 
 USER_BET_AMOUNT = 0
+USER_BALANCE = 0
 
 class GamePhase(Enum):
     BETTING = 1
@@ -22,11 +21,15 @@ class Bot:
         self.player_val = 0
         self.player_hand = 0
         self.prev_player_val = None
-        self.prev_dealer_val = 0
         self.player_cards = []
         self.screen_cap = ScreenCapture()
         self.m_game = None
         self.bet_amount = 0
+        
+        # should make this persist
+        self.player_balance = 0
+
+        self.phase = None
     
         self.decision = None
 
@@ -39,7 +42,6 @@ class Bot:
         self.cards_dealt = False 
         self.decision_made = False
 
-        self.dealer_ace = False
         self.yolo_model = None
         self.running = False
 
@@ -52,13 +54,12 @@ class Bot:
     def start_game(self, player_cards, dealer_upcard):
         if len(player_cards) == 2 and dealer_upcard != "":
             self.cards_dealt = True
-            if sum(map(int, self.player_cards)) == 21:
-                    print("Blackjack! Player wins.")
-                    self.end_game()
-                    #TODO stop loop and wait for next game
-                    time.sleep(3)
-                    return
-            
+
+            if self.blackjack(sum(map(int, player_cards))):
+                self.end_game()
+                time.sleep(3)
+                return
+    
             game = Game(player_cards, dealer_upcard)
             game.set_soft_hand(self.player_soft)
 
@@ -93,6 +94,14 @@ class Bot:
             # TODO: bot will read current cards if "waiting for other players" used as trigger for playing phase
             # DEALING
 
+        if "wait for next game" in game_status.lower():
+            # if self.game_in_progress:
+                # self.end_game()  # If the bot is in a game, end it
+                # self.game_in_progress = False  # Set the flag to indicate no game is in progress
+            print("Waiting for the next game to start...")
+            return  # Skip further processing and wait for the next game
+
+
         # sometimes status bar dissapears
         if any(status in game_status.lower() for status in ["please place your bets", "last bets", "bets closed"]):
             self.phase = GamePhase.BETTING
@@ -102,6 +111,8 @@ class Bot:
             self.phase = GamePhase.DECISION
         elif any(status in game_status.lower() for status in ["waiting for other players", "dealing"]) and self.cards_dealt:
             self.phase = GamePhase.PLAYING
+        else:
+            print("no status detected")
 
 
         if self.phase == GamePhase.BETTING and not self.bet_placed:
@@ -140,6 +151,10 @@ class Bot:
             bet_button_x, bet_button_y = detect_results["bet_button_location"]
 
             bet_amount = USER_BET_AMOUNT
+            if bet_amount > self.player_balance:
+                print("Insufficient balance.")
+                return
+            
             while bet_amount >= 10:
                 pyautogui.click(bet_ten_x, bet_ten_y)
                 bet_amount -= 10
@@ -152,14 +167,13 @@ class Bot:
 
             pyautogui.click(bet_button_x, bet_button_y)
             self.bet_placed = True
+            self.player_balance -= USER_BET_AMOUNT
 
             # print("Bet placed:", self.bet_amount)
 
     def parse_player_ace(self, player_value):
         if "/" in player_value:
             low_value, high_value = player_value.split("/")
-
-            # set player has ace if initial has 11
             if high_value == "11":
                 self.player_soft = True
 
@@ -170,11 +184,8 @@ class Bot:
         if "/" in dealer_value:
             low_value, high_value = dealer_value.split("/")
 
-            # value will be "1/11"
-
-            # set dealer has ace if initial has 11
-            if high_value == "11":
-                self.dealer_ace = True
+            # if high_value == "11":
+            #     self.dealer_ace = True
 
             return low_value, high_value
 
@@ -182,15 +193,10 @@ class Bot:
     def process_drawing_phase(self, img):
         player_value, dealer_value = self.screen_cap.process_frame(img)
 
-        if ("/" in dealer_value):
-            self.dealer_ace = True
-
         parsed_dealer_val = self.parse_dealer_ace(dealer_value)
-
-        # TODO: what if 2 aces are pulled?
-        # TODO: make sure cards aren't read incorrectly and add logic to counter that.
-        
         _, player_value = self.parse_player_ace(player_value)
+
+        # TODO: ace value logic may not be correct... want to keep value as x/xx, but want to store the actual value in list
 
         if not self.cards_dealt:
             # if player_value is not empty and prev_player_val is empty, then it's the first card
@@ -271,8 +277,6 @@ class Bot:
 
         if self.blackjack(dealer_value):
             self.end_game()
-            # need to break out of loop and end.
-            self.running = False
             return
 
         # dealer stands
@@ -319,7 +323,7 @@ class Bot:
         self.decision = self.m_game.new_card(new_card_val)
         self.m_game.set_soft_hand(is_soft)
 
-        if (self.decision == "b"):
+        if (self.decision == "bust"):
             print("Bust! Game over.")
             self.end_game()
             return
@@ -333,9 +337,16 @@ class Bot:
             # TODO: add logic to count dealer card as well in case of tie.
             return True
 
+    def update_balance(self, outcome):
+        if outcome == "win":
+            self.player_balance += USER_BET_AMOUNT * 2
+        elif outcome == "push":
+            self.player_balance += USER_BET_AMOUNT
+        print(f"Game outcome: {outcome}. Updated balance: {self.player_balance}")
+
 
     def end_game(self):
-        print("Game ended, starting new game.")
+        print("Game ended, waiting for next game.")
         self.cards_dealt = False
         self.player_val = 0
         self.prev_player_val = 0
@@ -345,49 +356,57 @@ class Bot:
         self.bet_placed = False
         self.decision = None
         self.decision_made = False
-        self.dealer_ace = False
         self.game_in_progress = False
-        self.prev_dealer_val = 0
         self.player_soft = False
 
-    def set_bet_amount(self):
-        global USER_BET_AMOUNT
-        while self.running:
-            try:
-                user_input = input("Enter your bet amount (or type 'exit' to stop the bot): ").strip()
-                if user_input.lower() == "exit":
-                    print("Stopping the bot...")
-                    self.running = False
-                    break
-                USER_BET_AMOUNT = int(user_input)
-                print(f"Bet amount updated to: {USER_BET_AMOUNT}")
-            except ValueError:
-                print("Invalid input. Please enter a valid number or type 'exit'.")
-
-
     def run(self):
-        print("Bot is running")
+        print("Welcome to bj bot :P")
+        print("Please make sure the game is running and visible on your screen.")
+        print("Type quit at any time to stop the bot")
+        print("Please enter your balance and bet amount to begin.")
+
+        # while True:
+        #     user_input = input("type in quit to exit: ").strip()
+
+        #     if user_input.lower() == "quit":
+        #         print("Bot will stop ...")
+        #         self.running = False
+        #         break
+        #     else:
+        #         print("Invalid input. Please type 'quit' to exit.")
+
+        while True:
+            try:
+                self.player_balance = int(input("Enter your balance: ").strip())
+                USER_BET_AMOUNT = int(input("Enter your bet amount: ").strip())
+                if USER_BET_AMOUNT > self.player_balance:
+                    print("Bet amount cannot exceed balance. Please enter a valid bet amount.")
+                else:
+                    break
+            except ValueError:
+                print("Invalid input. Please enter a valid number.")
+
+        print(f"\nBalance set to: {self.player_balance}")
+        print(f"Bet amount set to: {USER_BET_AMOUNT}\n")
+        print("Bot is now running")
+        self.running = True
         self.initialize_yolo()
 
+
         # GPT terminal input and bet amount setting
-        input_thread = threading.Thread(target=self.set_bet_amount, daemon=True)
-        input_thread.start()
+        # input_thread = threading.Thread(target=self.set_bet_amount, daemon=True)
+        # input_thread.start()
 
         while self.running: 
             if self.frame_count % 2 == 0:
                 img = self.screen_cap.capture_screen()
                 self.process_game_frame(img)
-      
-            # if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-            #     input_line = sys.stdin.readline().strip()
-            #     if input_line.lower() == "stop":
-            #         break
 
             self.frame_count += 1
             time.sleep(0.05)
         
-        input_thread.join()
-        print("Bot stopped")
+        # input_thread.join()
+        # print("Bot stopped")
 
 if __name__ == "__main__":
     processor = Bot()
