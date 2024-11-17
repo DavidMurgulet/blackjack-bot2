@@ -1,4 +1,5 @@
-from bot import Bot
+# from bot import Bot
+from modified_bot import Bot
 
 def main():
     processor = Bot()

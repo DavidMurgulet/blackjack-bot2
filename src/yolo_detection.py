@@ -22,7 +22,7 @@ class DetectionModel:
         }
 
     def detect(self, img):
-        results = self.model([img], conf=0.30, save=True)
+        results = self.model([img], conf=0.20, save=False)
         boxes = results[0].boxes.xyxy.tolist()
         classes = results[0].boxes.cls.tolist()
         names = results[0].names

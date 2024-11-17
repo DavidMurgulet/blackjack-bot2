@@ -1,3 +1,4 @@
+import easyocr      # easyocr==1.3.2
 import cv2
 import numpy as np
 import pyautogui
@@ -31,13 +32,13 @@ class ScreenCapture:
     def ocr_numbers(self, roi):
         # Recognize text using EasyOCR 
         
-        result = self.reader.readtext(roi, allowlist='0123456789/',  contrast_ths=0.5, adjust_contrast=0.7, decoder='greedy')
+        result = self.reader.readtext(roi, allowlist='0123456789/',  mag_ratio=2, contrast_ths=0.5, adjust_contrast=0.7, decoder='greedy')
         # Extract and return the recognized text
         return ' '.join([text for _, text, _ in result])
     
     def ocr_words(self, roi):
         # Recognize text using EasyOCR
-        result = self.reader.readtext(roi, contrast_ths=0.5, adjust_contrast=0.7, decoder='greedy')
+        result = self.reader.readtext(roi, allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ ', contrast_ths=0.5, adjust_contrast=0.7, decoder='greedy')
         # Extract and return the recognized text
         return ' '.join([text for _, text, _ in result])
     
@@ -55,6 +56,18 @@ class ScreenCapture:
 
     def process_frame(self, img):
         screen_height, screen_width, _ = img.shape
+
+        # import cv2          # opencv-python==4.5.2.52
+
+
+        # img1 = cv2.imread("test2.png")
+        # img2 = cv2.blur(img1, (3, 3))
+        # reader = easyocr.Reader(["en"])
+        # results1 = reader.readtext(img1, allowlist="0123456789")
+        # results2 = reader.readtext(img2, allowlist="0123456789")
+        # print(results1)  # []
+        # # [([[26, 0], [50, 0], [50, 30], [26, 30]], '7', 0.9999988079074598)]
+        # print(results2)
 
         # Define ROIs for player, dealer, and words
         rois = {
@@ -74,8 +87,8 @@ class ScreenCapture:
         status_msg = self.ocr_words(words_roi)
 
         # Save the ROIs to the "rois" folder (optional for debugging)
-        # cv2.imwrite("rois/player_roi.png", player_roi)
-        # cv2.imwrite("rois/dealer_roi.png", dealer_roi)
+        cv2.imwrite("rois/player_roi.png", player_roi)
+        cv2.imwrite("rois/dealer_roi.png", dealer_roi)
         # cv2.imwrite("rois/words_roi.png", words_roi)
 
         return curr_player_value, dealer_value, status_msg
