@@ -28,9 +28,15 @@ class ScreenCapture:
     def get_roi(self, img, x1, x2, y1, y2):
         return img[y1:y2, x1:x2]
 
-    def extract_text_with_easyocr(self, roi):
+    def ocr_numbers(self, roi):
         # Recognize text using EasyOCR 
-        #  allowlist ='0123456789/'
+        
+        result = self.reader.readtext(roi, allowlist='0123456789/',  contrast_ths=0.5, adjust_contrast=0.7, decoder='greedy')
+        # Extract and return the recognized text
+        return ' '.join([text for _, text, _ in result])
+    
+    def ocr_words(self, roi):
+        # Recognize text using EasyOCR
         result = self.reader.readtext(roi, contrast_ths=0.5, adjust_contrast=0.7, decoder='greedy')
         # Extract and return the recognized text
         return ' '.join([text for _, text, _ in result])
@@ -63,9 +69,9 @@ class ScreenCapture:
         words_roi = self.get_roi(img, *rois["words"])
 
         # Perform OCR using EasyOCR on each ROI
-        curr_player_value = self.extract_text_with_easyocr(player_roi)
-        dealer_value = self.extract_text_with_easyocr(dealer_roi)
-        status_msg = self.extract_text_with_easyocr(words_roi)
+        curr_player_value = self.ocr_numbers(player_roi)
+        dealer_value = self.ocr_numbers(dealer_roi)
+        status_msg = self.ocr_words(words_roi)
 
         # Save the ROIs to the "rois" folder (optional for debugging)
         # cv2.imwrite("rois/player_roi.png", player_roi)
