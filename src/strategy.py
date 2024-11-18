@@ -6,7 +6,7 @@ auto_bet = False
 
 class Game:
     def __init__(self, cards, dealer_upcard):
-        self.player_hand = [cards]
+        self.player_hand = cards
         self.dealer_hand = [dealer_upcard]
         self.player_total = sum(self.player_hand)
         self.split_games = []  

@@ -26,7 +26,7 @@ class Bot:
         self.frame_count = 0
         self.player_val = 0
         self.player_hand = 0
-        self.prev_player_val = None
+        self.prev_player_val = ""
         self.player_cards = []
         self.screen_cap = ScreenCapture()
         self.m_game = None
@@ -70,7 +70,7 @@ class Bot:
             game.set_soft_hand(self.player_soft)
 
             first_decision = game.make_decision()
-            print("game started")
+            print("game started... first decision:", first_decision)
             return game, first_decision
         
         print("game not started, some cards missing")
@@ -109,11 +109,11 @@ class Bot:
             self.phase = GamePhase.DRAWING
         elif "make your decision" in game_status.lower():
             self.phase = GamePhase.DECISION
-        elif any(status in game_status.lower() for status in ["waiting for other players", "dealing"]) and self.cards_dealt:
+        elif any(status in game_status.lower() for status in ["wait for other players", "dealing"]) and self.cards_dealt and self.decision_made:
             self.phase = GamePhase.PLAYING
         else:
             if game_status.lower() != self.last_printed_status:
-                print("no status detected")
+                # print("no status detected")
                 # TODO: this doesn't work sometimes.
                 self.last_printed_status = game_status.lower()
 
@@ -128,9 +128,7 @@ class Bot:
             self.process_drawing_phase(img)
         elif self.phase == GamePhase.DECISION and not self.decision_made:
             self.process_decision_phase(img)
-        elif self.phase == GamePhase.PLAYING:
-            self.decision_made = False
-
+        elif self.phase == GamePhase.PLAYING and self.decision_made:
             if self.decision == "hit":
                 self.process_playing_phase_hit(img)
             elif self.decision == "stand":
@@ -195,9 +193,6 @@ class Bot:
         else: 
             return player_value, player_value
 
-            
-        
-
     def parse_dealer_ace(self, dealer_value):
         if "/" in dealer_value:
             low_value, high_value = dealer_value.split("/")
@@ -210,31 +205,33 @@ class Bot:
         player_value, dealer_value, _ = self.screen_cap.process_frame(img)
         # TODO: ace value logic may not be correct... want to keep value as x/xx, but want to store the actual value in list
 
-        print("DEBUG player:", player_value)
-        print("DEUBG dealer:", dealer_value)
+        # print("DEBUG player:", player_value)
+        # print("DEUBG dealer:", dealer_value)
 
         if not self.cards_dealt:
             # First card detected (prev_player_val is empty)
             if self.prev_player_val == "" and player_value != "":  
                 print("first card detected")
-                print("prev:", self.prev_player_val)
-                print("player:", player_value)
+                # print("(first card) prev:", self.prev_player_val)
+                # print("(first card) player:", player_value)
 
                 _, player_value = self.parse_player_ace(player_value)
 
                 self.prev_player_val = player_value
-                self.player_cards.append(player_value)
+                int_player_value = int(player_value)
+                self.player_cards.append(int_player_value)
                 print("First card added to hand:", player_value)
                 # return #?
 
             # player_val not empty = second card detected
             elif player_value != "":
-                print("prev:", self.prev_player_val)
-                print("player:", player_value)
+                # print("(second card) prev:", self.prev_player_val)
+                # print("(second card) player:", player_value)
 
                 _, player_value = self.parse_player_ace(player_value)
-                ## TODO: ???
-                if self.prev_player_val !=  player_value:
+
+                if self.prev_player_val != player_value:
+                    # print("prev and player value not equal")
                     if self.blackjack(player_value):
                         self.end_game()
                         return
@@ -247,26 +244,27 @@ class Bot:
                     # because for ex. prev will be 13 instead of 3/13?
                     self.prev_player_val = player_value
                 
-                _, parsed_dealer_val = self.parse_dealer_ace(dealer_value)
-                result = self.start_game(self.player_cards, parsed_dealer_val)
-                if result is not None:
-                    self.m_game, self.decision = result
-                    return
+                    _, parsed_dealer_val = self.parse_dealer_ace(dealer_value)
+
+                    # print("parsed dealer val:", parsed_dealer_val)
+                    # print("player cards:", self.player_cards)
+
+                    result = self.start_game(self.player_cards, parsed_dealer_val)
+                    if result is not None:
+                        self.m_game, self.decision = result
+                        return
             else:
-            # Update prev_player_val to current player value if it's valid
-                self.prev_player_val = player_value
+                if player_value != "":
+                    self.prev_player_val = player_value
 
     def process_playing_phase_hit(self, img):
+        # error here due to missread. prev_val = 13 but player_val = ""
+        # also possible error due to how aces are read.
+
         player_value, _, _ = self.screen_cap.process_frame(img)
+        print("player value:", player_value)
+        print("prev player value:", self.prev_player_val)
 
-        # HIT [A, 4] soft -> [A, 4, A] soft
-        # frame 1 : player_value = 5/15 [A, 4]
-        # frame 2 : prev_low = 5
-        #           prev_high = 15
-        #           player_value = 6/16 (ace added) [A, 4, A]
-
-
-        
         # checks if player_value is not empty and prev_player_val is not empty and not equal to player_value
         if self.prev_player_val != "" and self.prev_player_val !=  player_value:
             if self.blackjack(player_value):
@@ -280,6 +278,7 @@ class Bot:
                 _, prev_high = self.parse_player_ace(self.prev_player_val)
 
                 new_card_val = int(high_val) - int(prev_high)
+                print("new card val:", new_card_val)
 
                 if self.update_player_hand(new_card_val, True):
                     return
@@ -290,6 +289,7 @@ class Bot:
                 # soft hand -> hard hand
                 prev_low, _ = self.parse_player_ace(self.prev_player_val)
                 new_card_val = int(player_value) - int(prev_low)
+                print("new card val:", new_card_val)
                 if self.update_player_hand(new_card_val, False):
                     return # BUST case
 
@@ -297,28 +297,40 @@ class Bot:
 
             elif ("/" not in player_value and "/" not in self.prev_player_val):
                 # hard hand case 
+                
+                if (player_value == ""):
+                    print("error occured and player value is empty")
+                    player_value = self.prev_player_val
+
                 new_card_val = int(player_value) - int(self.prev_player_val)
+                print("new card val:", new_card_val)
                 if self.update_player_hand(new_card_val, False):
                     return
 
                 self.prev_player_val = player_value 
-        
+        else:
+            if player_value != "":
+                print("prev player val is empty or equal to player value")
+                self.prev_player_val = player_value
     
     def process_playing_phase_stand(self, img):
         _, dealer_value, _ = self.screen_cap.process_frame(img)
+        int_dealer_value = int(dealer_value)
+        # could be 1/11? 
+        print("process_playing_phase_stand called")
 
         if self.blackjack(dealer_value):
-            self.end_game()
+            self.end_game("lose")
             return
 
         # dealer stands
-        if dealer_value >= 17 and dealer_value <= 21:
-            self.end_game()
+        if int_dealer_value >= 17 and int_dealer_value <= 21:
+            self.end_game("dealer stands")
             return
         
         # dealer busts
-        if dealer_value > 21:
-            self.end_game()
+        if int_dealer_value > 21:
+            self.end_game("win, dealer busts")
             return
         
         
@@ -329,25 +341,32 @@ class Bot:
         pass
 
     def process_decision_phase(self, img):
-        # resize image to 640x640 (if necessary)
+        self.decision_made = True
+        time.sleep(0.3)
         detect_results = self.yolo_model.detect(img)
-
-        if (detect_results["hit"] and detect_results["stand"] and detect_results["double"] and detect_results["split"]):
+        
+        #TODO: add logic for double and split
+        if detect_results.get("hit") and detect_results.get("stand"):
             hit_x, hit_y = detect_results["hit_location"]
             stand_x, stand_y = detect_results["stand_location"]
-            double_x, double_y = detect_results["double_location"]
-            split_x, split_y = detect_results["split_location"]
+            # double_x, double_y = detect_results["double_location"]
+            # split_x, split_y = detect_results["split_location"]
 
             if self.decision == "hit":
                 pyautogui.click(hit_x, hit_y)
+                print("clicked hit")
             elif self.decision == "stand":
                 pyautogui.click(stand_x, stand_y)
+                print("clicked stand")
             elif self.decision == "double":
-                pyautogui.click(double_x, double_y)
+                ## TODO: can only double twice.
+                # pyautogui.click(double_x, double_y)
+                # print("clicked double")
+                pass
             elif self.decision == "split":
-                pyautogui.click(split_x, split_y)
-
-            self.decision_made = True
+                # pyautogui.click(split_x, split_y)
+                # print("clicked split")
+                pass
 
     def update_player_hand(self, new_card_val, is_soft):
         self.player_cards.append(new_card_val)
@@ -357,9 +376,10 @@ class Bot:
 
         if (self.decision == "bust"):
             print("Bust! Game over.")
-            self.end_game()
+            self.end_game("lose")
             return
-
+        
+        self.decision_made = False
         print("decision updated to:", self.decision)
         return False
 
@@ -377,8 +397,9 @@ class Bot:
         print(f"Game outcome: {outcome}. Updated balance: {self.player_balance}")
 
 
-    def end_game(self):
+    def end_game(self, outcome):
         print("Game ended, waiting for next game.")
+        print("Game outcome:", outcome)
         self.cards_dealt = False
         self.player_val = 0
         self.prev_player_val = 0
@@ -419,7 +440,7 @@ class Bot:
         #         print("Invalid input. Please enter a valid number.")
 
         self.player_balance = 5
-        self.bet_amount = 1
+        self.bet_amount = 2
         print(f"\nBalance set to: {self.player_balance}")
         print(f"Bet amount set to: {self.bet_amount}\n")
         print("Bot is now running")
